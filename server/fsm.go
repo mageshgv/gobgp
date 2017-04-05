@@ -911,16 +911,16 @@ func (h *FSMHandler) opensent() (bgp.FSMState, FsmStateReason) {
 						// To re-establish the session with its peer, the Restarting Speaker
 						// MUST set the "Restart State" bit in the Graceful Restart Capability
 						// of the OPEN message.
-						if fsm.pConf.GracefulRestart.State.PeerRestarting && cap.Flags&0x08 == 0 {
-							log.WithFields(log.Fields{
-								"Topic": "Peer",
-								"Key":   fsm.pConf.Config.NeighborAddress,
-								"State": fsm.state.String(),
-							}).Warn("restart flag is not set")
-							// send notification?
-							h.conn.Close()
-							return bgp.BGP_FSM_IDLE, FSM_INVALID_MSG
-						}
+						// if fsm.pConf.GracefulRestart.State.PeerRestarting && cap.Flags&0x08 == 0 {
+						// 	log.WithFields(log.Fields{
+						// 		"Topic": "Peer",
+						// 		"Key":   fsm.pConf.Config.NeighborAddress,
+						// 		"State": fsm.state.String(),
+						// 	}).Warn("restart flag is not set")
+						// 	// send notification?
+						// 	h.conn.Close()
+						// 	return bgp.BGP_FSM_IDLE, FSM_INVALID_MSG
+						// }
 						if fsm.pConf.GracefulRestart.Config.NotificationEnabled && cap.Flags&0x04 > 0 {
 							fsm.pConf.GracefulRestart.State.NotificationEnabled = true
 						}
