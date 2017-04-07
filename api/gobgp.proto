@@ -541,6 +541,13 @@ message ValidateRibRequest {
 message ValidateRibResponse {
 }
 
+message Family {
+  uint32 family = 1;
+  bool mp_graceful_restart = 2;
+  bool longlived_graceful_restart = 3;
+  uint32 longlived_restart_time = 4;
+}
+
 message Peer {
   repeated uint32 families = 1;
   ApplyPolicy apply_policy = 2;
@@ -551,6 +558,7 @@ message Peer {
   Timers timers = 7;
   Transport transport = 8;
   RouteServer route_server = 9;
+  repeated Family afi_families = 10;
 }
 
 message ApplyPolicy {
@@ -583,6 +591,8 @@ message PeerConf {
   string local_address = 15;
   string neighbor_interface = 16;
   string vrf = 17;
+  bool graceful_restart = 18;
+  bool longlived_graceful_restart = 19;
 }
 
 message EbgpMultihop {

@@ -95,6 +95,17 @@ func NewPeerFromConfigStruct(pconf *config.Neighbor) *Peer {
 			families = append(families, uint32(family))
 		}
 	}
+	var afiFamilies []*Family
+	for _, f := range pconf.AfiSafis {
+		if family, ok := bgp.AddressFamilyValueMap[string(f.Config.AfiSafiName)]; ok {
+			afiFamilies = append(afiFamilies, &Family{
+				Family:                   uint32(family),
+				MpGracefulRestart:        f.MpGracefulRestart.Config.Enabled,
+				LonglivedGracefulRestart: f.LongLivedGracefulRestart.Config.Enabled,
+				LonglivedRestartTime:     f.LongLivedGracefulRestart.Config.RestartTime,
+			})
+		}
+	}
 	applyPolicy := &ApplyPolicy{}
 	if len(pconf.ApplyPolicy.Config.ImportPolicyList) != 0 {
 		applyPolicy.ImportPolicy = &PolicyAssignment{
@@ -149,25 +160,28 @@ func NewPeerFromConfigStruct(pconf *config.Neighbor) *Peer {
 	}
 	return &Peer{
 		Families:    families,
+		AfiFamilies: afiFamilies,
 		ApplyPolicy: applyPolicy,
 		Conf: &PeerConf{
-			NeighborAddress:   pconf.Config.NeighborAddress,
-			Id:                s.RemoteRouterId,
-			PeerAs:            pconf.Config.PeerAs,
-			LocalAs:           pconf.Config.LocalAs,
-			PeerType:          uint32(pconf.Config.PeerType.ToInt()),
-			AuthPassword:      pconf.Config.AuthPassword,
-			RemovePrivateAs:   uint32(pconf.Config.RemovePrivateAs.ToInt()),
-			RouteFlapDamping:  pconf.Config.RouteFlapDamping,
-			SendCommunity:     uint32(pconf.Config.SendCommunity.ToInt()),
-			Description:       pconf.Config.Description,
-			PeerGroup:         pconf.Config.PeerGroup,
-			RemoteCap:         remoteCap,
-			LocalCap:          localCap,
-			PrefixLimits:      prefixLimits,
-			LocalAddress:      localAddress,
-			NeighborInterface: pconf.Config.NeighborInterface,
-			Vrf:               pconf.Config.Vrf,
+			NeighborAddress:          pconf.Config.NeighborAddress,
+			Id:                       s.RemoteRouterId,
+			PeerAs:                   pconf.Config.PeerAs,
+			LocalAs:                  pconf.Config.LocalAs,
+			PeerType:                 uint32(pconf.Config.PeerType.ToInt()),
+			AuthPassword:             pconf.Config.AuthPassword,
+			RemovePrivateAs:          uint32(pconf.Config.RemovePrivateAs.ToInt()),
+			RouteFlapDamping:         pconf.Config.RouteFlapDamping,
+			SendCommunity:            uint32(pconf.Config.SendCommunity.ToInt()),
+			Description:              pconf.Config.Description,
+			PeerGroup:                pconf.Config.PeerGroup,
+			RemoteCap:                remoteCap,
+			LocalCap:                 localCap,
+			PrefixLimits:             prefixLimits,
+			LocalAddress:             localAddress,
+			NeighborInterface:        pconf.Config.NeighborInterface,
+			Vrf:                      pconf.Config.Vrf,
+			GracefulRestart:          pconf.GracefulRestart.Config.Enabled,
+			LonglivedGracefulRestart: pconf.GracefulRestart.Config.LongLivedEnabled,
 		},
 		Info: &PeerState{
 			BgpState:   string(s.SessionState),
@@ -861,6 +875,8 @@ func NewNeighborFromAPIStruct(a *Peer) (*config.Neighbor, error) {
 		pconf.Config.NeighborAddress = a.Conf.NeighborAddress
 		pconf.Config.NeighborInterface = a.Conf.NeighborInterface
 		pconf.Config.Vrf = a.Conf.Vrf
+		pconf.GracefulRestart.Config.Enabled = a.Conf.GracefulRestart
+		pconf.GracefulRestart.Config.LongLivedEnabled = a.Conf.LonglivedGracefulRestart
 
 		f := func(bufs [][]byte) ([]bgp.ParameterCapabilityInterface, error) {
 			var caps []bgp.ParameterCapabilityInterface
@@ -895,6 +911,30 @@ func NewNeighborFromAPIStruct(a *Peer) (*config.Neighbor, error) {
 					Enabled:     true,
 				},
 			})
+		}
+
+		if len(a.AfiFamilies) > 0 {
+			pconf.AfiSafis = pconf.AfiSafis[:0]
+			for _, f := range a.AfiFamilies {
+				family := bgp.RouteFamily(f.Family)
+				pconf.AfiSafis = append(pconf.AfiSafis, config.AfiSafi{
+					Config: config.AfiSafiConfig{
+						AfiSafiName: config.AfiSafiType(family.String()),
+						Enabled:     true,
+					},
+					MpGracefulRestart: config.MpGracefulRestart{
+						Config: config.MpGracefulRestartConfig{
+							Enabled: f.MpGracefulRestart,
+						},
+					},
+					LongLivedGracefulRestart: config.LongLivedGracefulRestart{
+						Config: config.LongLivedGracefulRestartConfig{
+							Enabled:     f.LonglivedGracefulRestart,
+							RestartTime: f.LonglivedRestartTime,
+						},
+					},
+				})
+			}
 		}
 
 		for _, pl := range a.Conf.PrefixLimits {
