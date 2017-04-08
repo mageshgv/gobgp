@@ -357,6 +357,11 @@ func (fsm *FSM) connectLoop() error {
 
 		if fsm.state == bgp.BGP_FSM_ACTIVE && !fsm.pConf.GracefulRestart.State.PeerRestarting {
 			timer.Reset(time.Duration(tick) * time.Second)
+		} else {
+			log.WithFields(log.Fields{
+				"Topic": "Peer",
+				"Key":   fsm.pConf.Config.NeighborAddress,
+			}).Debugf("XXX suppress connect due to PeerRestarting")
 		}
 	}
 
@@ -371,6 +376,11 @@ func (fsm *FSM) connectLoop() error {
 		case <-timer.C:
 			if fsm.state == bgp.BGP_FSM_ACTIVE && !fsm.pConf.GracefulRestart.State.PeerRestarting {
 				go connect()
+			} else {
+				log.WithFields(log.Fields{
+					"Topic": "Peer",
+					"Key":   fsm.pConf.Config.NeighborAddress,
+				}).Debugf("XXX suppress connect due to PeerRestarting")
 			}
 		case <-fsm.getActiveCh:
 			timer.Reset(time.Duration(r.Intn(MIN_CONNECT_RETRY)+MIN_CONNECT_RETRY) * time.Second)
