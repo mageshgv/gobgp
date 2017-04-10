@@ -1288,12 +1288,13 @@ func (h *FSMHandler) established() (bgp.FSMState, FsmStateReason) {
 			h.outgoing.In() <- &FsmOutgoingMsg{Notification: m}
 			var err FsmStateReason = FSM_HOLD_TIMER_EXPIRED
 			if s := fsm.pConf.GracefulRestart.State; s.Enabled {
+				err = FSM_GRACEFUL_RESTART
 				log.WithFields(log.Fields{
 					"Topic": "Peer",
 					"Key":   fsm.pConf.Config.NeighborAddress,
 					"State": fsm.state.String(),
 				}).Info("peer graceful restart")
-				err = FSM_GRACEFUL_RESTART
+				fsm.gracefulRestartTimer.Reset(time.Duration(fsm.pConf.GracefulRestart.State.PeerRestartTime) * time.Second)
 			}
 			return bgp.BGP_FSM_IDLE, err
 		case <-h.holdTimerResetCh:
