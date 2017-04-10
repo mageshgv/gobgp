@@ -1286,7 +1286,16 @@ func (h *FSMHandler) established() (bgp.FSMState, FsmStateReason) {
 			}).Warn("hold timer expired")
 			m := bgp.NewBGPNotificationMessage(bgp.BGP_ERROR_HOLD_TIMER_EXPIRED, 0, nil)
 			h.outgoing.In() <- &FsmOutgoingMsg{Notification: m}
-			return bgp.BGP_FSM_IDLE, FSM_HOLD_TIMER_EXPIRED
+			var err FsmStateReason = FSM_HOLD_TIMER_EXPIRED
+			if s := fsm.pConf.GracefulRestart.State; s.Enabled {
+				log.WithFields(log.Fields{
+					"Topic": "Peer",
+					"Key":   fsm.pConf.Config.NeighborAddress,
+					"State": fsm.state.String(),
+				}).Info("peer graceful restart")
+				err = FSM_GRACEFUL_RESTART
+			}
+			return bgp.BGP_FSM_IDLE, err
 		case <-h.holdTimerResetCh:
 			if fsm.pConf.Timers.State.NegotiatedHoldTime != 0 {
 				holdTimer.Reset(time.Second * time.Duration(fsm.pConf.Timers.State.NegotiatedHoldTime))
