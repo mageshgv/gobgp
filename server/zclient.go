@@ -445,14 +445,25 @@ type zebraClient struct {
 	server     *BgpServer
 	dead       chan struct{}
 	nhtManager *nexthopTrackingManager
+	watcher    *Watcher
 }
 
 func (z *zebraClient) stop() {
 	close(z.dead)
 }
 
+func (z *zebraClient) SendPaths(paths []*table.Path) {
+	if z.watcher == nil {
+		return
+	}
+	z.watcher.realCh <- &WatchEventBestPath{
+		PathList: paths,
+	}
+}
+
 func (z *zebraClient) loop() {
 	w := z.server.Watch(WatchBestPath(true))
+	z.watcher = w
 	defer w.Stop()
 
 	if z.nhtManager != nil {
