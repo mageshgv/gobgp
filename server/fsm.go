@@ -611,6 +611,12 @@ func (h *FSMHandler) recvMessageWithError() (*FsmMsg, error) {
 
 	headerBuf, err := readAll(h.conn, bgp.BGP_HEADER_LENGTH)
 	if err != nil {
+                log.WithFields(log.Fields{
+                        "Topic": "Peer",
+                        "Key":   h.fsm.pConf.Config.NeighborAddress,
+                        "State": h.fsm.state.String(),
+                        "error": err,
+                }).Error("Reading packet failed")
 		sendToErrorCh(FSM_READ_FAILED)
 		return nil, err
 	}
