@@ -382,7 +382,7 @@ func (z *zebraClient) loop() {
 			return
 		case msg := <-z.client.Receive():
 			if msg == nil {
-				break
+				return // z.dead is never set
 			}
 			switch body := msg.Body.(type) {
 			case *zebra.IPRouteBody:
@@ -532,7 +532,11 @@ func newZebraClient(s *BgpServer, url string, protos []string, version uint8, nh
 		},
 		dead: make(chan struct{}),
 	}
-	go w.loop()
+	go func() {
+		w.loop()
+		log.Warnf("Zclient handling stopped.")
+		w.server.zclient = nil // Workaround until proper retry mechanism is added
+	}()
 	if mplsLabelRangeSize > 0 {
 		if err = cli.SendGetLabelChunk(&zebra.GetLabelChunkBody{ChunkSize: mplsLabelRangeSize}); err != nil {
 			return nil, err

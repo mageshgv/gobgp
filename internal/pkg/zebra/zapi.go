@@ -1188,7 +1188,7 @@ func NewClient(network, address string, typ ROUTE_TYPE, version uint8, software 
 
 	// Start receive loop only when the first message successfully received.
 	go func() {
-		defer closeChannel(incoming)
+		defer close(incoming)
 		for {
 			if m, err := receiveSingleMsg(); err != nil {
 				return
@@ -1510,7 +1510,7 @@ func (c *Client) SendVrfLabel(label uint32, vrfId uint32) error {
 	return c.SendCommand(command, vrfId, body)
 }
 
-// for avoiding double close
+// TODO: Refactor channel handling to fix double close of outgoing channel
 func closeChannel(ch chan *Message) bool {
 	select {
 	case _, ok := <-ch:
