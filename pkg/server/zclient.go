@@ -458,7 +458,7 @@ func (z *zebraClient) loop() {
 				if body := newNexthopRegisterBody(msg.PathList, z.nexthopCache); body != nil {
 					vrfID := uint32(0)
 					for _, vrf := range z.server.listVrf() {
-						if vrf.Name == msg.Neighbor.Config.Vrf {
+						if msg.Neighbor != nil && vrf.Name == msg.Neighbor.Config.Vrf {
 							vrfID = uint32(vrf.Id)
 						}
 					}
