@@ -1811,10 +1811,21 @@ func (h *fsmHandler) established(ctx context.Context) (bgp.FSMState, *fsmStateRe
 				"Key":   fsm.pConf.State.NeighborAddress,
 				"State": fsm.state.String(),
 			}).Warn("hold timer expired")
-			fsm.lock.RUnlock()
 			m := bgp.NewBGPNotificationMessage(bgp.BGP_ERROR_HOLD_TIMER_EXPIRED, 0, nil)
+			err := *newfsmStateReason(fsmHoldTimerExpired, m, nil)
+			// If graceful restart is enabled, return peer graceful restart for fsm handler rather than hold timer expired
+			if s := fsm.pConf.GracefulRestart.State; s.Enabled && s.NotificationEnabled {
+				err = *newfsmStateReason(fsmGracefulRestart, nil, nil)
+				log.WithFields(log.Fields{
+					"Topic": "Peer",
+					"Key":   fsm.pConf.State.NeighborAddress,
+					"State": fsm.state.String(),
+				}).Info("peer graceful restart")
+				fsm.gracefulRestartTimer.Reset(time.Duration(fsm.pConf.GracefulRestart.State.PeerRestartTime) * time.Second)
+			}
+			fsm.lock.RUnlock()
 			h.outgoing.In() <- &fsmOutgoingMsg{Notification: m}
-			return bgp.BGP_FSM_IDLE, newfsmStateReason(fsmHoldTimerExpired, m, nil)
+			return bgp.BGP_FSM_IDLE, &err
 		case <-h.holdTimerResetCh:
 			fsm.lock.RLock()
 			if fsm.pConf.Timers.State.NegotiatedHoldTime != 0 {
