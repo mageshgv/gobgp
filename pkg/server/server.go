@@ -2187,6 +2187,28 @@ func (s *BgpServer) AddVrf(ctx context.Context, r *api.AddVrfRequest) error {
 			if s.zclient != nil && s.zclient.mplsLabel.rangeSize > 0 {
 				s.zclient.assignAndSendVrfMplsLabel(vrf)
 			}
+			vrfPathList := s.globalRib.GetBestPathList(name, 0, nil)
+			vrfMultiPathList := s.globalRib.GetBestMultiPathList(name, nil)
+			if len(vrfPathList) > 0 || len(vrfMultiPathList) > 0 {
+				m := make(map[string]uint32) // We only need vrf ids in watchEventBestPath, it need not be a map
+				clonedM := make([][]*table.Path, len(vrfMultiPathList))
+				for i, pathList := range vrfMultiPathList {
+					clonedM[i] = clonePathList(pathList)
+					m[clonedM[i][0].GetNlri().String()] = uint32(vrf.Id)
+				}
+				clonedB := clonePathList(vrfPathList)
+				for _, p := range clonedB {
+					m[p.GetNlri().String()] = uint32(vrf.Id)
+				}
+				w := &watchEventBestPath{
+					PathList:      clonedB,
+					MultiPathList: clonedM,
+				}
+
+				w.Vrf = m
+
+				s.notifyWatcher(watchEventTypeBestPath, w)
+			}
 		}
 		return nil
 	}, true)
@@ -2211,6 +2233,37 @@ func (s *BgpServer) DeleteVrf(ctx context.Context, r *api.DeleteVrfRequest) erro
 			vrfMplsLabel := vrf.MplsLabel
 			if vrfMplsLabel > 0 {
 				s.zclient.releaseMplsLabel(vrfMplsLabel)
+			}
+			if vrf, ok := s.globalRib.Vrfs[name]; ok {
+				if s.zclient != nil && s.zclient.mplsLabel.rangeSize > 0 {
+					s.zclient.assignAndSendVrfMplsLabel(vrf)
+				}
+				vrfPathList := s.globalRib.GetBestPathList(name, 0, nil)
+				vrfMultiPathList := s.globalRib.GetBestMultiPathList(name, nil)
+
+				if len(vrfPathList) > 0 || len(vrfMultiPathList) > 0 {
+					m := make(map[string]uint32)
+					clonedM := make([][]*table.Path, len(vrfMultiPathList))
+					for i, pathList := range vrfMultiPathList {
+						clonedM[i] = clonePathList(pathList)
+						for _, path := range clonedM[i] {
+							path.IsWithdraw = true
+						}
+						m[clonedM[i][0].GetNlri().String()] = uint32(vrf.Id)
+					}
+					clonedB := clonePathList(vrfPathList)
+					for _, p := range clonedB {
+						p.IsWithdraw = true
+						m[p.GetNlri().String()] = uint32(vrf.Id)
+					}
+
+					w := &watchEventBestPath{
+						PathList:      clonedB,
+						MultiPathList: clonedM,
+					}
+					w.Vrf = m
+					s.notifyWatcher(watchEventTypeBestPath, w)
+				}
 			}
 		}
 		pathList, err := s.globalRib.DeleteVrf(name)
@@ -2247,6 +2300,7 @@ func (s *BgpServer) softResetIn(addr string, family bgp.RouteFamily) error {
 		families := familiesForSoftreset(peer, family)
 
 		pathList := make([]*table.Path, 0, peer.adjRibIn.Count(families))
+
 		for _, path := range peer.adjRibIn.PathList(families, false) {
 			// RFC4271 9.1.2 Phase 2: Route Selection
 			//
@@ -2267,6 +2321,7 @@ func (s *BgpServer) softResetIn(addr string, family bgp.RouteFamily) error {
 				// update accepted counter
 				peer.adjRibIn.Update([]*table.Path{path})
 			}
+
 			if !path.IsAsLooped() {
 				pathList = append(pathList, path)
 			}
