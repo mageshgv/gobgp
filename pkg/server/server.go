@@ -698,32 +698,43 @@ func clonePathList(pathList []*table.Path) []*table.Path {
 	return l
 }
 
+func (s *BgpServer) setPathVrfIdMap(paths []*table.Path, m map[uint32]bool) {
+    for _, p := range paths {
+        switch p.GetRouteFamily() {
+        case bgp.RF_IPv4_VPN, bgp.RF_IPv6_VPN:
+            for _, vrf := range s.globalRib.Vrfs {
+                if vrf.Id != 0 && table.CanImportToVrf(vrf, p) {
+                    m[uint32(vrf.Id)] = true
+                }
+            }
+        }
+    }
+}
+
+// Note: the destination would be the same for all the paths passed here
+// The wathers(zapi) need a unique list of vrf IDs
 func (s *BgpServer) notifyBestWatcher(best []*table.Path, multipath [][]*table.Path) {
-	if table.SelectionOptions.DisableBestPathSelection {
-		// Note: If best path selection disabled, no best path to notify.
-		return
-	}
-	clonedM := make([][]*table.Path, len(multipath))
-	for i, pathList := range multipath {
-		clonedM[i] = clonePathList(pathList)
-	}
-	clonedB := clonePathList(best)
-	m := make(map[uint32]bool)
-	for _, p := range clonedB {
-		switch p.GetRouteFamily() {
-		case bgp.RF_IPv4_VPN, bgp.RF_IPv6_VPN:
-			for _, vrf := range s.globalRib.Vrfs {
-				if vrf.Id != 0 && table.CanImportToVrf(vrf, p) {
-					m[uint32(vrf.Id)] = true
-				}
-			}
-		}
-	}
-	w := &watchEventBestPath{PathList: clonedB, MultiPathList: clonedM}
-	if len(m) > 0 {
-		w.Vrf = m
-	}
-	s.notifyWatcher(watchEventTypeBestPath, w)
+    if table.SelectionOptions.DisableBestPathSelection {
+        // Note: If best path selection disabled, no best path to notify.
+        return
+    }
+    m := make(map[uint32]bool)
+    clonedM := make([][]*table.Path, len(multipath))
+    for i, pathList := range multipath {
+        clonedM[i] = clonePathList(pathList)
+        if table.UseMultiplePaths.Enabled {
+            s.setPathVrfIdMap(clonedM[i], m)
+        }
+    }
+    clonedB := clonePathList(best)
+    if !table.UseMultiplePaths.Enabled {
+        s.setPathVrfIdMap(clonedB, m)
+    }
+    w := &watchEventBestPath{PathList: clonedB, MultiPathList: clonedM}
+    if len(m) > 0 {
+        w.Vrf = m
+    }
+    s.notifyWatcher(watchEventTypeBestPath, w)
 }
 
 func (s *BgpServer) toConfig(peer *peer, getAdvertised bool) *config.Neighbor {

@@ -620,7 +620,46 @@ func TestMonitor(test *testing.T) {
 	assert.True(b.Vrf[1])
 	assert.True(b.Vrf[2])
 
-	// Stops the watcher still having an item.
+	if err := s.addPathList("vrf1", []*table.Path{table.NewPath(nil, bgp.NewIPAddrPrefix(24, "10.0.0.0"), true, attrs, time.Now(), false)}); err != nil {
+		log.Fatal(err)
+	}
+	ev = <-w.Event()
+	b = ev.(*watchEventBestPath)
+	assert.Equal(1, len(b.PathList))
+	assert.Equal("111:111:10.0.0.0/24", b.PathList[0].GetNlri().String())
+	assert.True(b.PathList[0].IsWithdraw)
+	assert.Equal(2, len(b.Vrf))
+	assert.True(b.Vrf[1])
+	assert.True(b.Vrf[2])
+
+	// Multipath config enabled tests
+	table.UseMultiplePaths.Enabled = true
+	if err := s.addPathList("vrf1", []*table.Path{table.NewPath(nil, bgp.NewIPAddrPrefix(24, "10.0.0.0"), false, attrs, time.Now(), false)}); err != nil {
+		log.Fatal(err)
+	}
+	ev = <-w.Event()
+	b = ev.(*watchEventBestPath)
+	assert.Equal(1, len(b.MultiPathList))
+	assert.Equal(1, len(b.MultiPathList[0]))
+	assert.Equal("111:111:10.0.0.0/24", b.MultiPathList[0][0].GetNlri().String())
+	assert.False(b.MultiPathList[0][0].IsWithdraw)
+	assert.Equal(2, len(b.Vrf))
+	assert.True(b.Vrf[1])
+	assert.True(b.Vrf[2])
+
+	// Withdraw the vrf route
+	if err := s.addPathList("vrf1", []*table.Path{table.NewPath(nil, bgp.NewIPAddrPrefix(24, "10.0.0.0"), true, nil, time.Now(), false)}); err != nil {
+		log.Fatal(err)
+	}
+	ev = <-w.Event()
+	b = ev.(*watchEventBestPath)
+	assert.Equal(1, len(b.MultiPathList))
+	assert.Equal(1, len(b.MultiPathList[0]))
+	assert.Equal("111:111:10.0.0.0/24", b.MultiPathList[0][0].GetNlri().String())
+	assert.True(b.MultiPathList[0][0].IsWithdraw)
+	assert.Equal(2, len(b.Vrf))
+	assert.True(b.Vrf[1])
+	assert.True(b.Vrf[2])
 	w.Stop()
 }
 
